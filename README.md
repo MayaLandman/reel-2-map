@@ -31,7 +31,7 @@ flowchart LR
     B -->|video| C[Speech to text<br/>faster-whisper + VAD]
     B -->|video| D[Frame selection<br/>ffmpeg scene detection<br/>+ near-duplicate removal]
     D --> E[OCR<br/>RapidOCR / ONNX]
-    C --> F[LLM extraction<br/>Claude, forced tool call]
+    C --> F[LLM extraction<br/>Claude API / Claude Code /<br/>local model via Ollama]
     E --> F
     D -->|frames ranked by<br/>new on-screen text| F
     F -->|places + confidence<br/>+ evidence| G[Geocoding<br/>Google Places or<br/>OpenStreetMap]
@@ -62,18 +62,33 @@ pip install -e ".[all]"            # core + Whisper + OCR
 cp .env.example .env               # then add your ANTHROPIC_API_KEY
 ```
 
-### Two ways to connect to Claude
+### Choose the AI backend
 
 | Backend | What you need | Billing |
 |---|---|---|
 | `api` | An `ANTHROPIC_API_KEY` from the [Claude Console](https://console.anthropic.com) in `.env` | Pay per use (a few cents per video) |
 | `claude-code` | [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) installed and signed in with a Claude plan (run `claude` once) | Counts against your plan's usage limits |
+| `ollama` | [Ollama](https://ollama.com) running locally with a vision model pulled | **Free**, runs on your machine, less accurate |
 
-The default, `--backend auto`, uses the API when a key is set, and otherwise uses Claude Code if it's installed. With `claude-code`, reel2map runs `claude -p` in headless mode. Claude Code reads the frame images with its own Read tool and replies with JSON that follows the same schema as the API backend.
+The default, `--backend auto`, uses the first one available, in this order: the API (if a key is set), Claude Code, then Ollama. With `claude-code`, reel2map runs `claude -p` in headless mode. Claude Code reads the frame images with its own Read tool and replies with JSON that follows the same schema as the API backend.
 
 ```bash
 reel2map extract URL --backend claude-code -o places.csv
 ```
+
+**Free, local model with Ollama.** No key and no cost: everything runs on your machine.
+
+```bash
+# install Ollama from https://ollama.com, then:
+ollama pull gemma3:4b               # ~3 GB, the default; fine on 8 GB RAM
+reel2map extract URL --backend ollama -o places.csv
+
+# more accurate if you have 16 GB+ RAM:
+ollama pull qwen2.5vl:7b
+REEL2MAP_OLLAMA_MODEL=qwen2.5vl:7b reel2map extract URL --backend ollama
+```
+
+Small local models are weaker at reading video frames, so this backend sends only a few frames (`REEL2MAP_OLLAMA_MAX_IMAGES`, default 6) and relies mostly on the OCR text and the transcript. Ollama's structured outputs constrain the reply to the same JSON schema the other backends use.
 
 ### Command line
 
@@ -131,7 +146,9 @@ All settings are environment variables, which can also go in `.env`:
 | Variable | Default | |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | none | Needed for the `api` backend |
-| `REEL2MAP_BACKEND` | `auto` | `api`, `claude-code` or `auto` |
+| `REEL2MAP_BACKEND` | `auto` | `api`, `claude-code`, `ollama` or `auto` |
+| `REEL2MAP_OLLAMA_MODEL` | `gemma3:4b` | Any Ollama vision model |
+| `REEL2MAP_OLLAMA_URL` | `http://localhost:11434` | Ollama server |
 | `GOOGLE_MAPS_API_KEY` | none | Optional. Uses Google Places instead of OpenStreetMap |
 | `REEL2MAP_MODEL` | `claude-sonnet-5-5` | LLM used for extraction |
 | `REEL2MAP_OUTPUT_LANGUAGE` | `en` | Language of the "why" text |
@@ -157,7 +174,8 @@ src/reel2map/
 ├── extract/
 │   ├── prompts.py        system prompt, tool schema, evidence builder
 │   ├── llm.py            Claude API extractor, slicing long videos, merging duplicates
-│   └── claude_code.py    same extraction through `claude -p` with a Claude plan login
+│   ├── claude_code.py    same extraction through `claude -p` with a Claude plan login
+│   └── ollama.py         free local models through Ollama, with structured outputs
 ├── geo/geocoder.py       Google Places / Nominatim behind one interface
 ├── pipeline.py           orchestration, parallel media stages, timings, graceful failures
 ├── export.py             CSV, KML, GeoJSON, JSON

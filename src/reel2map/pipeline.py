@@ -200,27 +200,45 @@ class Pipeline:
 
 
 def make_extractor(settings: Settings) -> Extractor:
-    """Pick the LLM backend: the API when a key is set, else a signed-in Claude Code."""
+    """Pick the LLM backend. `auto` tries, in order: the Claude API (if a key is set),
+    Claude Code signed in with a Claude plan, then a free local model in Ollama."""
     from reel2map.extract.claude_code import ClaudeCodeExtractor, claude_cli
+    from reel2map.extract.ollama import OllamaExtractor, ollama_running
 
     s = settings
     backend = s.backend
     if backend == "auto":
-        backend = "api" if s.anthropic_api_key or not claude_cli() else "claude-code"
-    if backend == "claude-code":
-        return ClaudeCodeExtractor(
-            s.claude_code_model, max_images=s.max_images, language=s.output_language
-        )
-    if backend != "api":
-        raise ValueError(f"unknown backend {backend!r}; use api, claude-code or auto")
-    if not s.anthropic_api_key:
-        raise ValueError(
-            "ANTHROPIC_API_KEY is not set. Add it to .env, or install Claude Code and sign in "
-            "with your Claude plan to use --backend claude-code."
-        )
-    return ClaudeExtractor(
-        s.anthropic_api_key, s.model, max_images=s.max_images, language=s.output_language
-    )
+        if s.anthropic_api_key:
+            backend = "api"
+        elif claude_cli():
+            backend = "claude-code"
+        elif ollama_running(s.ollama_url):
+            backend = "ollama"
+        else:
+            raise ValueError(
+                "No LLM backend available. Use one of: ANTHROPIC_API_KEY in .env (api), "
+                "Claude Code signed in with a Claude plan (claude-code), or a free local "
+                "model with Ollama (ollama). See the README."
+            )
+    match backend:
+        case "api":
+            if not s.anthropic_api_key:
+                raise ValueError("ANTHROPIC_API_KEY is not set; add it to .env")
+            return ClaudeExtractor(
+                s.anthropic_api_key, s.model, max_images=s.max_images, language=s.output_language
+            )
+        case "claude-code":
+            return ClaudeCodeExtractor(
+                s.claude_code_model, max_images=s.max_images, language=s.output_language
+            )
+        case "ollama":
+            return OllamaExtractor(
+                s.ollama_model,
+                base_url=s.ollama_url,
+                max_images=s.ollama_max_images,
+                language=s.output_language,
+            )
+    raise ValueError(f"unknown backend {backend!r}; use api, claude-code, ollama or auto")
 
 
 @contextmanager

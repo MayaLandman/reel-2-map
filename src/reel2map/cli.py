@@ -74,7 +74,9 @@ def extract(
     lang: Annotated[str, typer.Option(help="Language for the 'why' text (en, he, ...).")] = "en",
     backend: Annotated[
         str,
-        typer.Option(help="LLM backend: api, claude-code (uses your Claude plan), or auto."),
+        typer.Option(
+            help="LLM backend: api, claude-code (your Claude plan), ollama (free, local), or auto."
+        ),
     ] = "auto",
     transcribe: Annotated[bool, typer.Option(help="Transcribe speech with Whisper.")] = True,
     ocr: Annotated[bool, typer.Option(help="Read on-screen text.")] = True,
