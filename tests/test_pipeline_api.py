@@ -130,3 +130,14 @@ def test_api_job_lifecycle(settings) -> None:
     assert csv.status_code == 200 and "Roscioli" in csv.text
     assert client.get("/api/jobs/nope").status_code == 404
     assert client.post("/api/jobs", json={"url": "not a url"}).status_code == 422
+
+
+def test_pipeline_fails_fast_without_api_key(settings) -> None:
+    import pytest
+
+    called = []
+    settings.anthropic_api_key = None
+    pipe = Pipeline(settings, downloader=lambda *a, **k: called.append(a))
+    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+        pipe.run("https://www.tiktok.com/@a/video/1")
+    assert called == []  # nothing was downloaded

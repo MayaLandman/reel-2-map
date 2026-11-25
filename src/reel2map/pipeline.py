@@ -119,6 +119,10 @@ class Pipeline:
                     StageTiming(stage=name, seconds=round(time.perf_counter() - start, 2))
                 )
 
+        # Fail fast on configuration errors (e.g. a missing API key) before spending a
+        # minute on downloading and transcribing.
+        extractor = self.extractor
+
         with _workdir(workdir) as wd:
             with stage("download"):
                 post = self.downloader(
@@ -128,7 +132,7 @@ class Pipeline:
             transcript, frames = self._analyse_media(post, wd, options, stage, warnings)
 
             with stage("extract"):
-                extraction = self.extractor.extract(post, transcript, frames)
+                extraction = extractor.extract(post, transcript, frames)
 
             places = [
                 ResolvedPlace(**p.model_dump())
