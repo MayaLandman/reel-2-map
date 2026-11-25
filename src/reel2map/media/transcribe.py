@@ -31,10 +31,27 @@ def _load_model(name: str):
     return WhisperModel(name, device="auto", compute_type="int8")
 
 
+def load_wav(path: Path):
+    """Read the 16 kHz mono PCM WAV written by ffmpeg into float32 samples.
+
+    Decoding it ourselves keeps faster-whisper from going through PyAV, whose API
+    changes between releases (newer PyAV no longer accepts `open(metadata_errors=...)`).
+    """
+    import wave
+
+    import numpy as np
+
+    with wave.open(str(path), "rb") as wav:
+        if wav.getsampwidth() != 2 or wav.getnchannels() != 1:
+            raise ValueError("expected 16-bit mono WAV")
+        frames = wav.readframes(wav.getnframes())
+    return np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+
+
 def transcribe(audio: Path, model_name: str = "small") -> Transcript:
     model = _load_model(model_name)
     # VAD skips the music-only parts that make Whisper hallucinate lyrics.
-    segments, info = model.transcribe(str(audio), vad_filter=True, beam_size=5)
+    segments, info = model.transcribe(load_wav(audio), vad_filter=True, beam_size=5)
     result = Transcript(
         language=info.language,
         segments=[

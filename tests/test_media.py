@@ -121,3 +121,13 @@ def test_listicle_frames_and_ocr(tmp_path: Path) -> None:
     for name, _, _ in cards:
         assert name in text
     assert len(frames) <= 6  # repeated title cards were deduplicated
+
+
+@needs_ffmpeg
+def test_load_wav_reads_ffmpeg_output(sample_video: Path, tmp_path: Path) -> None:
+    pytest.importorskip("numpy")
+    from reel2map.media.transcribe import load_wav
+
+    samples = load_wav(ffmpeg.extract_audio(sample_video, tmp_path / "a.wav"))
+    assert 7.5 * 16000 < len(samples) < 8.5 * 16000
+    assert 0.1 < float(abs(samples).max()) <= 1.0
