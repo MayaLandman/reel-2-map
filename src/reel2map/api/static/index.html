@@ -1,123 +1,489 @@
 <!doctype html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>reel2map</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>מהריל למפה</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Suez+One&family=IBM+Plex+Sans+Hebrew:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-  :root { --bg:#f7f6f3; --card:#fff; --ink:#1d1d1f; --muted:#6b6b70; --line:#e4e2dd; --accent:#0b6e4f; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#141416; --card:#1e1e21; --ink:#f2f2f2; --muted:#a0a0a6; --line:#2e2e33; --accent:#3ccf91; }
+:root {
+  --bg: #eceeea; --surface: #fbfcfa; --ink: #1a221f; --muted: #5a6661; --line: #d2d9d4;
+  --accent: #0e6a5b; --accent-ink: #fff; --accent-soft: #d7eae4;
+  --pin: #d9532a; --pin-soft: #f8e1d7; --water: #c9dde4;
+  --warn-bg: #fbeedc; --warn-ink: #7a4810; --danger: #a23b2c;
+  --shadow: 0 1px 2px rgba(20,34,30,.06), 0 6px 18px -10px rgba(20,34,30,.18);
+  --font-display: "Suez One", "Frank Ruhl Libre", Georgia, serif;
+  --font-body: "IBM Plex Sans Hebrew", "Assistant", "Segoe UI", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1517; --surface: #172024; --ink: #e5ece9; --muted: #98a6a1; --line: #29353a;
+    --accent: #4cc2ab; --accent-ink: #0a1513; --accent-soft: #19332e; --pin: #f07a4e; --pin-soft: #3a2219;
+    --water: #18323c; --warn-bg: #3a2b17; --warn-ink: #f0c995; --danger: #ec8a7a;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 22px -12px rgba(0,0,0,.6); color-scheme: dark;
   }
-  * { box-sizing: border-box; }
-  body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  p.lead { color: var(--muted); margin: 0 0 20px; }
-  form { display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 16px; }
-  input[type=url] { flex: 1 1 380px; padding: 10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); font:inherit; }
-  select, button { padding: 10px 14px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--ink); font:inherit; }
-  button { background: var(--accent); color:#fff; border:none; font-weight:600; cursor:pointer; }
-  button:disabled { opacity:.6; cursor:wait; }
-  #status { color: var(--muted); min-height: 1.5em; margin-bottom: 12px; }
-  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
-  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
-  #map { height: 520px; border-radius: 12px; border:1px solid var(--line); }
-  ol { list-style:none; margin:0; padding:0; max-height:520px; overflow:auto; }
-  li { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:8px; unicode-bidi: plaintext; }
-  li .top { display:flex; justify-content:space-between; gap:8px; }
-  li b { font-size: 16px; }
-  .chip { font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; white-space:nowrap; }
-  .why { margin: 6px 0; unicode-bidi: plaintext; }
-  .meta { font-size: 13px; color: var(--muted); }
-  a { color: var(--accent); }
-  .exports a { margin-inline-end: 12px; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+.gutter { padding-inline: max(16px, env(safe-area-inset-left, 0px)); }
+.inner { max-width: 1100px; margin: 0 auto; }
+
+.masthead { position: relative; overflow: hidden; background: var(--surface); border-bottom: 1px solid var(--line); }
+.masthead svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.masthead .inner { position: relative; padding-block: 38px 24px; display: flex; flex-direction: column; gap: 8px; }
+h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(34px, 6vw, 56px); line-height: 1.02; margin: 0; }
+h1 .dot { color: var(--pin); }
+.lede { margin: 0; color: var(--muted); max-width: 62ch; }
+.river .r { fill: none; stroke: var(--water); stroke-width: 42; stroke-linecap: round; }
+.river .route { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 1 9; stroke-linecap: round; opacity: .55; }
+.river .p { fill: var(--pin); } .river .h { fill: var(--surface); }
+@media (max-width: 700px) { .masthead svg { opacity: .5; } }
+
+.tabbar { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.tabs { display: flex; gap: 4px; }
+.tab { background: none; border: none; border-radius: 0; padding: 13px 14px 11px; color: var(--muted); font: inherit; font-weight: 600; border-bottom: 3px solid transparent; cursor: pointer; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--pin); }
+.count { font-size: 12px; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 0 8px; margin-inline-start: 4px; font-variant-numeric: tabular-nums; }
+
+main.inner { padding-block: 24px 64px; }
+.view { display: flex; flex-direction: column; gap: 20px; }
+.card { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+label.big { font-family: var(--font-display); font-size: 20px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+input[type="url"] { flex: 1 1 280px; min-width: 0; font: 15px var(--font-mono); direction: ltr; text-align: left; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+button, .btn { font: inherit; font-weight: 600; cursor: pointer; border-radius: 10px; padding: 10px 16px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:disabled { opacity: .55; cursor: default; }
+.small { padding: 6px 11px !important; font-size: 13.5px; font-weight: 500; }
+button:not(.primary):not(.icon):hover, .btn:hover { border-color: var(--accent); }
+.btn.map { color: var(--accent); border-color: var(--accent); }
+button.saved { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.steps li { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 14px; }
+.steps li::before { content: ""; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--line); flex: none; }
+.steps li.active { color: var(--ink); font-weight: 500; }
+.steps li.active::before { border-color: var(--pin); background: var(--pin); animation: pulse 1.1s ease-in-out infinite; }
+.steps li.done::before { border-color: var(--accent); background: var(--accent); }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .steps li.active::before { animation: none; } }
+.msg { white-space: pre-line; border-radius: 10px; padding: 10px 12px; font-size: 14px; background: var(--warn-bg); color: var(--warn-ink); }
+.msg.error { color: var(--danger); }
+.msg.ok { background: var(--accent-soft); color: var(--accent); }
+
+.results-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+h2 { font-family: var(--font-display); font-weight: 400; font-size: 24px; margin: 0; line-height: 1.2; }
+.sub { color: var(--muted); font-size: 13.5px; margin: 2px 0 0; overflow-wrap: anywhere; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.group { display: flex; flex-direction: column; gap: 10px; }
+.group h3 { margin: 0; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.places { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+@media (min-width: 900px) { .places { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); align-items: start; } }
+.place { display: grid; grid-template-columns: 34px 1fr; gap: 12px; background: var(--surface); border-radius: 14px; padding: 14px; box-shadow: var(--shadow); }
+.pin { width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--pin); display: grid; place-items: center; margin-top: 2px; }
+.pin span { transform: rotate(45deg); color: #fff; font-weight: 600; font-size: 13px; }
+.pbody { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pname { font-weight: 600; font-size: 17px; margin: 0; overflow-wrap: anywhere; unicode-bidi: plaintext; text-align: start; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12.5px; }
+.chip { border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; color: var(--muted); }
+.chip.cat { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 500; }
+.chip.warn { background: var(--warn-bg); border-color: transparent; color: var(--warn-ink); }
+.why { margin: 0; }
+.plinks { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.src { font-size: 13px; color: var(--muted); text-decoration: none; border-bottom: 1px dashed var(--line); }
+.src:hover { color: var(--accent); border-color: var(--accent); }
+
+.lists { display: flex; flex-direction: column; gap: 22px; }
+.country { display: flex; flex-direction: column; gap: 10px; }
+.country-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 6px; border-bottom: 2px solid var(--pin); }
+.country-head h2 { font-size: 26px; }
+.city { display: flex; flex-direction: column; gap: 8px; }
+.city h3 { margin: 0; font-size: 17px; font-weight: 600; }
+.city-lists { display: grid; gap: 8px; padding-inline-start: 12px; border-inline-start: 2px solid var(--line); }
+@media (min-width: 900px) { .city-lists { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); align-items: start; } }
+.list { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); }
+.list[open] { box-shadow: var(--shadow), 0 0 0 1.5px var(--accent-soft); }
+.list > summary { list-style: none; cursor: pointer; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 16px; }
+.list > summary::-webkit-details-marker { display: none; }
+.lname { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.lemoji { font-size: 19px; }
+.chev { color: var(--muted); font-size: 13px; transition: transform .15s; }
+.list[open] .chev { transform: rotate(180deg); }
+.list-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+.gl-help { display: flex; flex-direction: column; gap: 6px; background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; }
+.gl-help ol { margin: 0; padding-inline-start: 18px; }
+.gl-progress { font-weight: 600; color: var(--accent); }
+.lrows { list-style: none; margin: 0; padding: 0; }
+.lrow { padding: 12px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 5px; }
+.lrow.done .pname::after { content: " ✓"; color: var(--accent); }
+.lrow .pname { font-size: 16px; }
+.lrow-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ingoogle { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; cursor: pointer; }
+.ingoogle input { width: 16px; height: 16px; accent-color: var(--accent); }
+button.icon { border: none; background: none; color: var(--muted); padding: 4px 8px; font-weight: 500; font-size: 13px; }
+button.icon:hover { color: var(--danger); }
+.copy { border: none; background: none; padding: 0 4px; color: var(--accent); font-size: 13px; cursor: pointer; }
+.chip.gl { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 500; }
+.empty { text-align: center; color: var(--muted); padding: 28px 12px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.toast { position: fixed; bottom: 18px; inset-inline: 0; margin: 0 auto; width: max-content; max-width: calc(100% - 32px); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
 </style>
 </head>
 <body>
-<main>
-  <h1>reel2map</h1>
-  <p class="lead">Paste a TikTok, Instagram Reel or YouTube Short. The video is downloaded, its speech transcribed, its on-screen text read, and every recommended place is put on the map.</p>
-  <form id="f">
-    <input type="url" id="url" required placeholder="https://www.tiktok.com/@user/video/…">
-    <select id="lang"><option value="en">English</option><option value="he">עברית</option><option value="it">Italiano</option></select>
-    <button id="go">Extract places</button>
-  </form>
-  <div id="status"></div>
-  <div class="exports" id="exports" hidden></div>
-  <div class="grid">
-    <div id="map"></div>
-    <ol id="list"></ol>
+<header class="masthead gutter">
+  <svg class="river" viewBox="0 0 1200 260" preserveAspectRatio="xMinYMid slice" aria-hidden="true">
+    <path class="r" d="M-40,40 C120,30 160,120 250,130 C360,142 380,40 470,60 C560,80 520,200 610,230 C680,252 720,250 760,300"/>
+    <path class="route" d="M90,210 C170,170 230,200 300,170 C380,136 410,190 500,160"/>
+    <g transform="translate(90,205)"><path class="p" d="M0,-20 C-11,-20 -15,-10 -15,-5 C-15,6 0,19 0,19 C0,19 15,6 15,-5 C15,-10 11,-20 0,-20 Z"/><circle class="h" r="5" cy="-5"/></g>
+    <g transform="translate(300,166)"><path class="p" d="M0,-20 C-11,-20 -15,-10 -15,-5 C-15,6 0,19 0,19 C0,19 15,6 15,-5 C15,-10 11,-20 0,-20 Z"/><circle class="h" r="5" cy="-5"/></g>
+    <g transform="translate(500,156)"><path class="p" d="M0,-20 C-11,-20 -15,-10 -15,-5 C-15,6 0,19 0,19 C0,19 15,6 15,-5 C15,-10 11,-20 0,-20 Z"/><circle class="h" r="5" cy="-5"/></g>
+  </svg>
+  <div class="inner">
+    <h1>מהריל למפה<span class="dot">.</span></h1>
+    <p class="lede">מדביקים קישור לריל המלצות מטיקטוק או מאינסטגרם. המערכת מורידה את הסרטון, מתמללת את הדיבור, קוראת את הטקסט שעל המסך ומחזירה כל מקום עם הסבר קצר וקישור לגוגל מפות. מה שתשמרו נכנס לרשימות שלכם, מחולק לפי מדינה, עיר וסוג.</p>
+  </div>
+</header>
+
+<div class="tabbar gutter">
+  <nav class="tabs inner" role="tablist">
+    <button type="button" class="tab" role="tab" id="tab-new" aria-selected="true">ניתוח ריל</button>
+    <button type="button" class="tab" role="tab" id="tab-lists" aria-selected="false">הרשימות שלי<span class="count" id="listcount">0</span></button>
+  </nav>
+</div>
+
+<div class="gutter">
+<main class="inner">
+  <div class="view" id="view-new">
+    <form class="card" id="form" novalidate>
+      <label class="big" for="url">קישור לריל או לפוסט</label>
+      <div class="row">
+        <input type="url" id="url" placeholder="https://vt.tiktok.com/…" autocomplete="off" inputmode="url" required>
+        <button type="submit" class="primary" id="go">חלץ המלצות</button>
+      </div>
+      <ul class="steps" id="steps" hidden></ul>
+      <div class="msg" id="msg" hidden></div>
+    </form>
+
+    <section class="card" id="results" aria-live="polite" hidden>
+      <div class="results-head">
+        <div>
+          <h2 id="rtitle"></h2>
+          <p class="sub" id="rsub"></p>
+        </div>
+        <div class="actions">
+          <button type="button" class="small primary" id="saveall">שמור הכל לרשימות שלי</button>
+          <a class="btn small" id="dlcsv" href="#">CSV</a>
+          <a class="btn small" id="dlkml" href="#">KML</a>
+        </div>
+      </div>
+      <div id="groups" class="view"></div>
+      <div class="msg" id="warnings" hidden></div>
+    </section>
+  </div>
+
+  <div class="view" id="view-lists" hidden>
+    <div class="actions" id="listactions" hidden>
+      <button type="button" class="small" id="exportlists">ייצוא כל הרשימות ל-CSV (ל-Google My Maps)</button>
+    </div>
+    <div class="lists" id="lists"></div>
   </div>
 </main>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
 <script>
-const map = L.map('map').setView([41.9, 12.49], 3);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
-const layer = L.layerGroup().addTo(map);
 const $ = id => document.getElementById(id);
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-function mapsUrl(p) {
-  if (p.geo) return p.geo.maps_url;
-  const q = [p.name, p.address_hint, p.city, p.country].filter(Boolean).join(', ');
-  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
+// The model answers with an English category; the lists use these Hebrew types.
+const TYPES = [
+  ["מסעדות", "🍝", ["restaurant", "trattoria", "osteria"]],
+  ["פיצריות", "🍕", ["pizzeria", "pizza"]],
+  ["בתי קפה", "☕", ["cafe", "coffee", "brunch"]],
+  ["ברים", "🍸", ["bar", "wine_bar", "cocktail_bar", "pub"]],
+  ["מאפים", "🥐", ["bakery", "pastry", "patisserie"]],
+  ["גלידריות", "🍨", ["gelato", "ice_cream", "gelateria"]],
+  ["קינוחים", "🍰", ["dessert", "sweets"]],
+  ["אוכל רחוב", "🌯", ["street_food", "takeaway", "sandwich"]],
+  ["שווקים", "🧺", ["market", "food_market"]],
+  ["חנויות", "🛍️", ["shop", "store", "boutique", "shopping"]],
+  ["אטרקציות", "🏛️", ["attraction", "museum", "landmark", "church", "monument", "gallery"]],
+  ["תצפיות", "🌇", ["viewpoint", "view", "rooftop"]],
+  ["פארקים", "🌳", ["park", "garden"]],
+  ["חופים", "🏖️", ["beach"]],
+  ["חיי לילה", "🎶", ["nightlife", "club"]],
+  ["מלונות", "🏨", ["hotel"]],
+  ["אחר", "📍", ["other"]],
+];
+const TYPE_ORDER = TYPES.map(t => t[0]);
+const EMOJI = Object.fromEntries(TYPES.map(([he, e]) => [he, e]));
+const CAT2TYPE = Object.fromEntries(TYPES.flatMap(([he, , cats]) => cats.map(c => [c, he])));
+const typeOf = cat => CAT2TYPE[String(cat || "other").toLowerCase().replace(/[\s-]+/g, "_")] || "אחר";
+
+const regionNames = (() => { try { return new Intl.DisplayNames(["he"], { type: "region" }); } catch { return null; } })();
+const flag = cc => /^[A-Za-z]{2}$/.test(cc || "") ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65)) : "";
+const countryName = p => (p.country_code && regionNames ? regionNames.of(p.country_code.toUpperCase()) : null) || p.country || "ללא מדינה";
+const cityName = p => p.city_local || p.city || "ללא עיר";
+const cityTag = p => `${cityName(p)} ${flag(p.country_code)}`.trim();
+const key = (name, city) => [name, city].map(x => String(x || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "")).join("|");
+const places = n => n === 1 ? "מקום אחד" : `${n} מקומות`;
+const mapsUrl = p => p.maps_url || (p.geo && p.geo.maps_url) ||
+  "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([p.name, p.address_hint, p.city, p.country].filter(Boolean).join(", "));
+
+function toast(text) {
+  const t = $("toast"); t.textContent = text; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2200);
+}
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+  return res.status === 204 ? null : res.json();
 }
 
-function render(job) {
-  const r = job.result;
-  layer.clearLayers();
-  $('list').innerHTML = '';
-  const pts = [];
-  r.places.forEach((p, i) => {
-    const li = document.createElement('li');
-    li.innerHTML = `<div class="top"><b>${i + 1}. ${esc(p.name)}</b><span class="chip">${esc(p.category)}</span></div>
-      <div class="why">${esc(p.why)}</div>
-      <div class="meta">${esc([p.city, p.country].filter(Boolean).join(', '))} · confidence ${p.confidence.toFixed(2)} · ${esc(p.evidence.join(', '))}
-      · <a href="${esc(mapsUrl(p))}" target="_blank" rel="noopener">Google Maps</a></div>`;
-    $('list').appendChild(li);
-    if (p.geo) {
-      const m = L.marker([p.geo.lat, p.geo.lon]).bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.why)}`);
-      layer.addLayer(m); pts.push([p.geo.lat, p.geo.lon]);
-      li.style.cursor = 'pointer';
-      li.onclick = () => { map.setView([p.geo.lat, p.geo.lon], 16); m.openPopup(); };
-    }
-  });
-  if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 15 });
-  const secs = r.timings.reduce((a, t) => a + t.seconds, 0).toFixed(0);
-  $('status').textContent = `${r.places.length} places found in ${secs}s. ${r.summary || ''}`;
-  $('exports').hidden = false;
-  $('exports').innerHTML = 'Download: ' + ['csv', 'kml', 'geojson', 'json']
-    .map(f => `<a href="/api/jobs/${job.id}/export?format=${f}">${f.toUpperCase()}</a>`).join('');
+/* ---------- tabs ---------- */
+function show(tab) {
+  for (const t of ["new", "lists"]) {
+    $("tab-" + t).setAttribute("aria-selected", String(t === tab));
+    $("view-" + t).hidden = t !== tab;
+  }
+  if (tab === "lists") renderLists();
+}
+$("tab-new").onclick = () => show("new");
+$("tab-lists").onclick = () => show("lists");
+
+/* ---------- saved places ---------- */
+let saved = [];
+let savedKeys = new Set();
+async function loadSaved() {
+  saved = await api("/api/places");
+  savedKeys = new Set(saved.map(p => key(p.name, p.city)));
+  $("listcount").textContent = saved.length;
 }
 
-async function poll(id) {
-  const res = await fetch(`/api/jobs/${id}`);
-  const job = await res.json();
-  if (job.status === 'done') return render(job);
-  if (job.status === 'failed') { $('status').textContent = 'Failed: ' + job.error; return; }
-  $('status').textContent = `Working… ${job.stage || job.status}`;
-  setTimeout(() => poll(id), 1500);
+/* ---------- analyze ---------- */
+const STEPS = [
+  ["download", "מוריד את הסרטון והכיתוב"],
+  ["transcribe + frames + ocr", "מתמלל את הדיבור וקורא את הטקסט שעל המסך"],
+  ["extract", "מזהה את המקומות"],
+  ["geocode", "מאתר כל מקום במפה"],
+];
+function renderSteps(stage, done) {
+  const i = done ? STEPS.length : Math.max(0, STEPS.findIndex(s => s[0] === stage));
+  $("steps").hidden = false;
+  $("steps").innerHTML = STEPS.map(([, label], n) =>
+    `<li class="${n < i ? "done" : n === i ? "active" : ""}">${label}</li>`).join("");
+}
+function message(text, kind = "") {
+  $("msg").hidden = !text; $("msg").className = "msg " + kind; $("msg").textContent = text || "";
 }
 
-$('f').onsubmit = async e => {
+let job = null;
+$("form").onsubmit = async e => {
   e.preventDefault();
-  $('go').disabled = true; $('exports').hidden = true;
-  $('status').textContent = 'Queued…';
+  const url = $("url").value.trim();
+  if (!/^https?:\/\//.test(url)) return message("צריך להדביק קישור שמתחיל ב-https://", "error");
+  $("go").disabled = true; $("results").hidden = true; message("");
+  renderSteps("download");
   try {
-    const res = await fetch('/api/jobs', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: $('url').value, language: $('lang').value })
-    });
-    const job = await res.json();
-    if (!res.ok) throw new Error(JSON.stringify(job.detail));
+    job = await api("/api/jobs", { method: "POST", body: JSON.stringify({ url, language: "he" }) });
     await poll(job.id);
-  } catch (err) { $('status').textContent = 'Error: ' + err.message; }
-  finally { $('go').disabled = false; }
+  } catch (err) {
+    message("משהו השתבש: " + err.message, "error");
+  } finally {
+    $("go").disabled = false;
+  }
 };
+async function poll(id) {
+  for (;;) {
+    const j = await api(`/api/jobs/${id}`);
+    if (j.status === "done") { renderSteps(null, true); return renderResults(j); }
+    if (j.status === "failed") { $("steps").hidden = true; return message("לא הצלחתי לנתח את הריל:\n" + j.error, "error"); }
+    renderSteps(j.stage || "download");
+    await new Promise(r => setTimeout(r, 1200));
+  }
+}
+
+let current = [];
+function renderResults(j) {
+  const r = j.result;
+  current = r.places.map(p => ({ ...p, type: typeOf(p.category), source: r.post.url }));
+  $("results").hidden = false;
+  $("rtitle").textContent = r.summary || "ההמלצות מהריל";
+  const secs = r.timings.reduce((a, t) => a + t.seconds, 0);
+  $("rsub").textContent = `${places(current.length)} · נותח ב-${Math.round(secs)} שניות`;
+  $("dlcsv").href = `/api/jobs/${j.id}/export?format=csv`;
+  $("dlkml").href = `/api/jobs/${j.id}/export?format=kml`;
+  $("warnings").hidden = !r.warnings.length;
+  $("warnings").textContent = r.warnings.join("\n");
+  if (!current.length) {
+    $("groups").innerHTML = `<p class="empty">לא מצאתי בריל הזה מקומות שאפשר לשים על מפה.</p>`;
+    $("saveall").hidden = true;
+    return;
+  }
+  $("saveall").hidden = false;
+  const groups = {};
+  current.forEach((p, i) => (groups[p.type] ||= []).push([p, i]));
+  let n = 0;
+  $("groups").innerHTML = TYPE_ORDER.filter(t => groups[t]).map(t => `
+    <section class="group">
+      <h3><span class="lemoji">${EMOJI[t]}</span>${esc(t)} <span class="count">${groups[t].length}</span></h3>
+      <ul class="places">${groups[t].map(([p, i]) => placeCard(p, i, ++n)).join("")}</ul>
+    </section>`).join("");
+  syncSaveButtons();
+}
+function placeCard(p, i, n) {
+  const ts = p.timestamp != null ? `בשנייה ${Math.round(p.timestamp)}` : "";
+  return `<li class="place">
+    <div class="pin"><span>${n}</span></div>
+    <div class="pbody">
+      <p class="pname">${esc(p.name)}</p>
+      <div class="meta">
+        <span class="chip cat">${EMOJI[p.type]} ${esc(p.type)}</span>
+        ${p.city || p.city_local ? `<span class="chip">${esc(cityTag(p))}</span>` : ""}
+        ${p.confidence < 0.6 ? `<span class="chip warn">כדאי לבדוק</span>` : ""}
+      </div>
+      ${p.why ? `<p class="why">${esc(p.why)}</p>` : ""}
+      <div class="plinks">
+        <a class="btn small map" href="${esc(mapsUrl(p))}" target="_blank" rel="noopener">פתח בגוגל מפות</a>
+        <button type="button" class="small" data-save="${i}">שמור לרשימות</button>
+        <a class="src" href="${esc(p.source)}" target="_blank" rel="noopener">מהסרטון${ts ? " · " + ts : ""}</a>
+      </div>
+    </div>
+  </li>`;
+}
+function syncSaveButtons() {
+  document.querySelectorAll("[data-save]").forEach(b => {
+    const p = current[+b.dataset.save];
+    const isSaved = savedKeys.has(key(p.name, p.city));
+    b.textContent = isSaved ? "נשמר ✓" : "שמור לרשימות";
+    b.classList.toggle("saved", isSaved);
+    b.disabled = isSaved;
+  });
+  $("saveall").disabled = current.every(p => savedKeys.has(key(p.name, p.city)));
+}
+function toNewPlace(p) {
+  return {
+    name: p.name, category: p.category, city: p.city, country: p.country,
+    country_code: p.country_code, city_local: p.city_local, why: p.why,
+    address: p.geo ? p.geo.address : p.address_hint, maps_url: mapsUrl(p),
+    lat: p.geo ? p.geo.lat : null, lon: p.geo ? p.geo.lon : null, source: p.source,
+  };
+}
+async function save(list) {
+  await api("/api/places", { method: "POST", body: JSON.stringify({ places: list.map(toNewPlace) }) });
+  await loadSaved();
+  syncSaveButtons();
+  toast(list.length === 1 ? `${list[0].name} נשמר לרשימות` : `${places(list.length)} נשמרו לרשימות`);
+}
+$("groups").onclick = e => {
+  const b = e.target.closest("[data-save]");
+  if (b) save([current[+b.dataset.save]]).catch(err => toast("השמירה נכשלה: " + err.message));
+};
+$("saveall").onclick = () => save(current.filter(p => !savedKeys.has(key(p.name, p.city))))
+  .catch(err => toast("השמירה נכשלה: " + err.message));
+
+/* ---------- my lists: country -> city -> type ---------- */
+const openLists = new Set();
+function renderLists() {
+  $("listactions").hidden = !saved.length;
+  if (!saved.length) {
+    $("lists").innerHTML = `<div class="card empty"><h2>עוד אין רשימות</h2>
+      <p>נתחו ריל בלשונית "ניתוח ריל" ולחצו "שמור" על המקומות שאתם רוצים לזכור.</p></div>`;
+    return;
+  }
+  const tree = {};
+  for (const p of saved) {
+    const c = countryName(p), city = cityName(p), t = typeOf(p.category);
+    ((tree[c] ||= { flag: flag(p.country_code), cities: {} }).cities[city] ||= {})[t] ||= [];
+    tree[c].cities[city][t].push(p);
+  }
+  $("lists").innerHTML = Object.entries(tree).sort().map(([country, { flag: f, cities }]) => `
+    <section class="country">
+      <div class="country-head"><h2>${f} ${esc(country)}</h2></div>
+      ${Object.entries(cities).sort().map(([city, types]) => `
+        <div class="city">
+          <h3>${esc(city)}</h3>
+          <div class="city-lists">
+            ${TYPE_ORDER.filter(t => types[t]).map(t => listCard(country, city, t, types[t])).join("")}
+          </div>
+        </div>`).join("")}
+    </section>`).join("");
+}
+function listCard(country, city, type, items) {
+  const id = `${country}|${city}|${type}`;
+  const inG = items.filter(p => p.in_google).length;
+  const tag = cityTag(items[0]);
+  return `<details class="list" data-id="${esc(id)}"${openLists.has(id) ? " open" : ""}>
+    <summary>
+      <span class="lname"><span class="lemoji">${EMOJI[type]}</span>${esc(type)}</span>
+      <span class="sub">${inG ? `<span class="chip gl">${inG === items.length ? "✓ הכל בגוגל" : `${inG}/${items.length} בגוגל`}</span> ` : ""}${places(items.length)} <span class="chev">▾</span></span>
+    </summary>
+    <div class="list-body">
+      <div class="gl-help">
+        <span>בגוגל מפות: רשימה <b>${esc(type)}</b><button type="button" class="copy" data-copy="${esc(type)}">העתק</button>
+        ותג <b>${esc(tag)}</b><button type="button" class="copy" data-copy="${esc(tag)}">העתק</button></span>
+        <ol>
+          <li>לכל מקום: "פתח בגוגל מפות" ← "שמירה" ← בוחרים את הרשימה <b>${esc(type)}</b>.</li>
+          <li>באפליקציה באייפון: ברשימה ← "עריכת התגים" ← מוסיפים למקום את התג <b>${esc(tag)}</b>.</li>
+          <li>מסמנים כאן "נוסף לרשימה בגוגל" כדי לדעת מה כבר בפנים.</li>
+        </ol>
+        <span class="gl-progress">${inG} מתוך ${items.length} כבר בגוגל</span>
+      </div>
+      <ul class="lrows">${items.map(p => `
+        <li class="lrow${p.in_google ? " done" : ""}">
+          <p class="pname">${esc(p.name)}</p>
+          ${p.why ? `<p class="why">${esc(p.why)}</p>` : ""}
+          <div class="plinks">
+            <a class="btn small map" href="${esc(p.maps_url)}" target="_blank" rel="noopener">פתח בגוגל מפות</a>
+            ${p.sources.map((s, i) => `<a class="src" href="${esc(s)}" target="_blank" rel="noopener">${p.sources.length > 1 ? `סרטון ${i + 1}` : "מהסרטון"}</a>`).join(" ")}
+          </div>
+          <div class="lrow-foot">
+            <label class="ingoogle"><input type="checkbox" data-ing="${esc(p.id)}"${p.in_google ? " checked" : ""}> נוסף לרשימה בגוגל</label>
+            <button type="button" class="icon" data-del="${esc(p.id)}">הסרה</button>
+          </div>
+        </li>`).join("")}</ul>
+    </div>
+  </details>`;
+}
+$("lists").addEventListener("toggle", e => {
+  const d = e.target; if (!d.matches || !d.matches("details.list")) return;
+  d.open ? openLists.add(d.dataset.id) : openLists.delete(d.dataset.id);
+}, true);
+$("lists").onclick = async e => {
+  const copy = e.target.closest("[data-copy]");
+  if (copy) {
+    try { await navigator.clipboard.writeText(copy.dataset.copy); toast("הועתק: " + copy.dataset.copy); }
+    catch { toast("לא הצלחתי להעתיק"); }
+    return;
+  }
+  const del = e.target.closest("[data-del]");
+  if (del) {
+    if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "בטוח? ללחוץ שוב"; return; }
+    await api(`/api/places/${del.dataset.del}`, { method: "DELETE" });
+    await loadSaved(); renderLists(); toast("המקום הוסר מהרשימות");
+  }
+};
+$("lists").onchange = async e => {
+  const box = e.target.closest("[data-ing]");
+  if (!box) return;
+  await api(`/api/places/${box.dataset.ing}`, { method: "PATCH", body: JSON.stringify({ in_google: box.checked }) });
+  await loadSaved(); renderLists();
+};
+$("exportlists").onclick = () => {
+  const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const rows = [["Name", "List", "City", "Country", "Latitude", "Longitude", "Description", "Google Maps", "Source"]]
+    .concat(saved.map(p => [p.name, typeOf(p.category), cityName(p), countryName(p), p.lat, p.lon, p.why, p.maps_url, p.sources.join(" ")]));
+  const blob = new Blob(["﻿" + rows.map(r => r.map(cell).join(",")).join("\n")], { type: "text/csv" });
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "my-lists.csv" });
+  a.click(); URL.revokeObjectURL(a.href);
+};
+
+loadSaved().catch(() => {});
 </script>
 </body>
 </html>

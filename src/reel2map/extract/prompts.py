@@ -26,7 +26,9 @@ and speech recognition make mistakes: cross-check them against each other and th
 - Background mentions do not count (a chain store visible behind someone, a product).
 - If the post names a branch or a street, put it in address_hint.
 - Infer city and country from the caption, hashtags, location tag, language, signage and \
-landmarks. Leave them empty rather than guessing wildly.
+landmarks. Leave them empty rather than guessing wildly. Write city and country in \
+English (they are used for geocoding), give country_code as the ISO 3166-1 alpha-2 code \
+(e.g. IT), and city_local as the city's name in {language}.
 - confidence: 0.9+ when the name is clearly written or said; 0.5-0.8 when inferred from \
 partial evidence; below 0.5 when you are unsure it is even a real place.
 - evidence lists which sources support the place.
@@ -47,6 +49,11 @@ PLACE_SCHEMA = {
         },
         "city": {"type": ["string", "null"]},
         "country": {"type": ["string", "null"]},
+        "country_code": {"type": ["string", "null"], "description": "ISO 3166-1 alpha-2"},
+        "city_local": {
+            "type": ["string", "null"],
+            "description": "City name in the output language",
+        },
         "address_hint": {"type": ["string", "null"]},
         "why": {"type": "string"},
         "evidence": {

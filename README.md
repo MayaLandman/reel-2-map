@@ -112,7 +112,10 @@ reel2map extract URL --no-transcribe --keep-media ./debug
 reel2map serve            # http://127.0.0.1:8000, API docs at /docs
 ```
 
-Paste a link, and the places show up on a Leaflet map as they're found, with download buttons for each format.
+The web app (in Hebrew, right-to-left) has two tabs:
+
+- **Analyze a reel:** paste a link and follow the stages live (download, speech and on-screen text, extraction, geocoding). Each place comes back as a card grouped by type, with a short explanation, a Google Maps link, the second in the video where it appears, and a save button.
+- **My lists:** saved places grouped by country, then city, then type (restaurants, pizzerias, cafes…), the way Google Maps saved lists are usually organized. Each list shows the list name and city tag to use in Google Maps, lets you tick off what's already there, and everything can be exported to CSV for Google My Maps. Saved places live in a small JSON file (`REEL2MAP_DATA_DIR`, by default `~/.local/share/reel2map`).
 
 ```bash
 curl -X POST localhost:8000/api/jobs -H 'Content-Type: application/json' \
@@ -160,6 +163,7 @@ All settings are environment variables, which can also go in `.env`:
 | `REEL2MAP_COOKIES_FROM_BROWSER` | none | `chrome`, `firefox`, `safari`… (Instagram) |
 | `REEL2MAP_COOKIES_FILE` | none | Netscape cookies.txt, as an alternative |
 | `REEL2MAP_FFMPEG` | auto | Path to a specific ffmpeg binary |
+| `REEL2MAP_DATA_DIR` | `~/.local/share/reel2map` | Where the web app keeps saved places |
 
 ## Project layout
 
@@ -180,7 +184,7 @@ src/reel2map/
 ├── pipeline.py           orchestration, parallel media stages, timings, graceful failures
 ├── export.py             CSV, KML, GeoJSON, JSON
 ├── cli.py                Typer CLI
-└── api/                  FastAPI app, background jobs, Leaflet web page
+└── api/                  FastAPI app, background jobs, saved-places store, Hebrew web app
 ```
 
 ## Development

@@ -53,6 +53,10 @@ class Settings(BaseSettings):
 
     # --- Misc ---
     cache_dir: Path = Path.home() / ".cache" / "reel2map"
+    data_dir: Path = Field(
+        default=Path.home() / ".local" / "share" / "reel2map",
+        description="Where the web app keeps saved places.",
+    )
 
 
 def get_settings(**overrides: object) -> Settings:

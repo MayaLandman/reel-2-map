@@ -75,6 +75,8 @@ class Place(BaseModel):
     )
     city: str | None = None
     country: str | None = None
+    country_code: str | None = Field(default=None, description="ISO 3166-1 alpha-2, e.g. IT")
+    city_local: str | None = Field(default=None, description="City name in the output language")
     address_hint: str | None = Field(default=None, description="Street, neighborhood or landmark")
     why: str = Field(default="", description="One or two sentences: why it is recommended")
     evidence: list[Evidence] = Field(default_factory=list)

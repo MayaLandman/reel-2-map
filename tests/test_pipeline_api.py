@@ -100,7 +100,7 @@ def test_pipeline_degrades_when_transcription_fails(sample_video, settings) -> N
     assert result.places[0].geo is None
 
 
-def test_api_job_lifecycle(settings) -> None:
+def test_api_job_lifecycle(settings, tmp_path) -> None:
     class InstantPipeline:
         def run(self, url, options, progress=None):
             from reel2map.models import ExtractionResult, Platform, Post, ResolvedPlace
@@ -113,7 +113,9 @@ def test_api_job_lifecycle(settings) -> None:
                 ],
             )
 
-    client = TestClient(create_app(pipeline_factory=lambda lang: InstantPipeline()))
+    client = TestClient(
+        create_app(pipeline_factory=lambda lang: InstantPipeline(), places_path=tmp_path / "p.json")
+    )
     assert client.get("/api/health").json()["status"] == "ok"
     assert "reel2map" in client.get("/").text
 
@@ -142,3 +144,33 @@ def test_pipeline_fails_fast_without_api_key(settings) -> None:
     with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
         pipe.run("https://www.tiktok.com/@a/video/1")
     assert called == []  # nothing was downloaded
+
+
+def test_saved_places_crud(tmp_path) -> None:
+    path = tmp_path / "places.json"
+    client = TestClient(create_app(pipeline_factory=lambda lang: None, places_path=path))
+    place = {
+        "name": "Roscioli",
+        "category": "restaurant",
+        "city": "Rome",
+        "city_local": "רומא",
+        "country_code": "IT",
+        "why": "קרבונרה",
+        "maps_url": "https://maps.example/r",
+        "source": "https://www.tiktok.com/@a/video/1",
+    }
+    saved = client.post("/api/places", json={"places": [place]}).json()
+    assert len(saved) == 1 and saved[0]["sources"] == [place["source"]]
+
+    # saving the same place from another video merges the sources instead of duplicating
+    again = dict(place, source="https://www.tiktok.com/@b/video/2")
+    client.post("/api/places", json={"places": [again]})
+    listed = client.get("/api/places").json()
+    assert len(listed) == 1 and len(listed[0]["sources"]) == 2
+
+    pid = listed[0]["id"]
+    assert client.patch(f"/api/places/{pid}", json={"in_google": True}).json()["in_google"]
+    assert path.exists()  # persisted to disk
+    assert client.delete(f"/api/places/{pid}").status_code == 204
+    assert client.get("/api/places").json() == []
+    assert client.delete(f"/api/places/{pid}").status_code == 404

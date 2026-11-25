@@ -4,6 +4,12 @@ Extraction takes 20-90 seconds, so it runs as a background job:
     POST /api/jobs            {"url": "..."}            -> {"id": "...", "status": "queued"}
     GET  /api/jobs/{id}                                  -> status, current stage, result
     GET  /api/jobs/{id}/export?format=csv|kml|geojson|json
+
+Saved places ("my lists" in the web page):
+    GET    /api/places                     all saved places
+    POST   /api/places   {"places": [...]} save places (deduplicated by name + city)
+    PATCH  /api/places/{id} {"in_google": true}
+    DELETE /api/places/{id}
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field, HttpUrl
 
 from reel2map import __version__
+from reel2map.api.store import NewPlace, PlaceStore, SavedPlace
 from reel2map.config import get_settings
 from reel2map.export import export
 from reel2map.models import ExtractionResult
@@ -44,7 +51,7 @@ class JobStatus(StrEnum):
 
 class JobRequest(BaseModel):
     url: HttpUrl
-    language: str = "en"
+    language: str = "he"
     transcribe: bool = True
     ocr: bool = True
     geocode: bool = True
@@ -59,6 +66,15 @@ class Job(BaseModel):
     error: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     result: ExtractionResult | None = None
+
+
+class SavePlaces(BaseModel):
+    places: list[NewPlace]
+
+
+class PlacePatch(BaseModel):
+    in_google: bool | None = None
+    category: str | None = None
 
 
 class JobStore:
@@ -82,13 +98,16 @@ class JobStore:
             self._jobs[job_id] = job.model_copy(update=fields)
 
 
-def create_app(pipeline_factory=None, max_workers: int = 2) -> FastAPI:
+def create_app(
+    pipeline_factory=None, max_workers: int = 2, places_path: Path | None = None
+) -> FastAPI:
     api = FastAPI(
         title="reel2map",
         version=__version__,
         description="Turn recommendation videos into a map of real places.",
     )
     store = JobStore()
+    places = PlaceStore(places_path or get_settings().data_dir / "places.json")
     executor = ThreadPoolExecutor(max_workers=max_workers)
 
     def default_factory(language: str) -> Pipeline:
@@ -147,6 +166,27 @@ def create_app(pipeline_factory=None, max_workers: int = 2) -> FastAPI:
             media_type=MEDIA_TYPES[format],
             headers={"Content-Disposition": f'attachment; filename="places-{job_id}.{format}"'},
         )
+
+    @api.get("/api/places")
+    def list_places() -> list[SavedPlace]:
+        return places.all()
+
+    @api.post("/api/places", status_code=201)
+    def save_places(body: SavePlaces) -> list[SavedPlace]:
+        return places.add(body.places)
+
+    @api.patch("/api/places/{place_id}")
+    def patch_place(place_id: str, body: PlacePatch) -> SavedPlace:
+        fields = body.model_dump(exclude_none=True)
+        updated = places.update(place_id, **fields)
+        if not updated:
+            raise HTTPException(404, "place not found")
+        return updated
+
+    @api.delete("/api/places/{place_id}", status_code=204)
+    def delete_place(place_id: str) -> None:
+        if not places.delete(place_id):
+            raise HTTPException(404, "place not found")
 
     return api
 
