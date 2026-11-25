@@ -62,6 +62,19 @@ pip install -e ".[all]"            # core + Whisper + OCR
 cp .env.example .env               # then add your ANTHROPIC_API_KEY
 ```
 
+### Two ways to connect to Claude
+
+| Backend | What you need | Billing |
+|---|---|---|
+| `api` | An `ANTHROPIC_API_KEY` from the [Claude Console](https://console.anthropic.com) in `.env` | Pay per use (a few cents per video) |
+| `claude-code` | [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) installed and signed in with a Claude plan (run `claude` once) | Counts against your plan's usage limits |
+
+The default, `--backend auto`, uses the API when a key is set, and otherwise uses Claude Code if it's installed. With `claude-code`, reel2map runs `claude -p` in headless mode. Claude Code reads the frame images with its own Read tool and replies with JSON that follows the same schema as the API backend.
+
+```bash
+reel2map extract URL --backend claude-code -o places.csv
+```
+
 ### Command line
 
 ```bash
@@ -117,7 +130,8 @@ All settings are environment variables, which can also go in `.env`:
 
 | Variable | Default | |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | none | Required for extraction |
+| `ANTHROPIC_API_KEY` | none | Needed for the `api` backend |
+| `REEL2MAP_BACKEND` | `auto` | `api`, `claude-code` or `auto` |
 | `GOOGLE_MAPS_API_KEY` | none | Optional. Uses Google Places instead of OpenStreetMap |
 | `REEL2MAP_MODEL` | `claude-sonnet-5-5` | LLM used for extraction |
 | `REEL2MAP_OUTPUT_LANGUAGE` | `en` | Language of the "why" text |
@@ -142,7 +156,8 @@ src/reel2map/
 │   └── ocr.py            RapidOCR + novelty-based frame ranking
 ├── extract/
 │   ├── prompts.py        system prompt, tool schema, evidence builder
-│   └── llm.py            Claude extractor, slicing long videos, merging duplicates
+│   ├── llm.py            Claude API extractor, slicing long videos, merging duplicates
+│   └── claude_code.py    same extraction through `claude -p` with a Claude plan login
 ├── geo/geocoder.py       Google Places / Nominatim behind one interface
 ├── pipeline.py           orchestration, parallel media stages, timings, graceful failures
 ├── export.py             CSV, KML, GeoJSON, JSON

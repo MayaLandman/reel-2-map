@@ -83,10 +83,7 @@ class Pipeline:
     @property
     def extractor(self) -> Extractor:
         if self._extractor is None:
-            s = self.settings
-            self._extractor = ClaudeExtractor(
-                s.anthropic_api_key, s.model, max_images=s.max_images, language=s.output_language
-            )
+            self._extractor = make_extractor(self.settings)
         return self._extractor
 
     @property
@@ -200,6 +197,30 @@ class Pipeline:
             t = pool.submit(speech)
             f = pool.submit(pictures)
             return t.result(), f.result()
+
+
+def make_extractor(settings: Settings) -> Extractor:
+    """Pick the LLM backend: the API when a key is set, else a signed-in Claude Code."""
+    from reel2map.extract.claude_code import ClaudeCodeExtractor, claude_cli
+
+    s = settings
+    backend = s.backend
+    if backend == "auto":
+        backend = "api" if s.anthropic_api_key or not claude_cli() else "claude-code"
+    if backend == "claude-code":
+        return ClaudeCodeExtractor(
+            s.claude_code_model, max_images=s.max_images, language=s.output_language
+        )
+    if backend != "api":
+        raise ValueError(f"unknown backend {backend!r}; use api, claude-code or auto")
+    if not s.anthropic_api_key:
+        raise ValueError(
+            "ANTHROPIC_API_KEY is not set. Add it to .env, or install Claude Code and sign in "
+            "with your Claude plan to use --backend claude-code."
+        )
+    return ClaudeExtractor(
+        s.anthropic_api_key, s.model, max_images=s.max_images, language=s.output_language
+    )
 
 
 @contextmanager

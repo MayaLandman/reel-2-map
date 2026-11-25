@@ -137,6 +137,7 @@ def test_pipeline_fails_fast_without_api_key(settings) -> None:
 
     called = []
     settings.anthropic_api_key = None
+    settings.backend = "api"
     pipe = Pipeline(settings, downloader=lambda *a, **k: called.append(a))
     with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
         pipe.run("https://www.tiktok.com/@a/video/1")

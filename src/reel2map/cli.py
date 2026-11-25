@@ -72,6 +72,10 @@ def extract(
     ] = None,
     fmt: Annotated[str, typer.Option("-f", "--format", help=f"One of: {', '.join(FORMATS)}")] = "",
     lang: Annotated[str, typer.Option(help="Language for the 'why' text (en, he, ...).")] = "en",
+    backend: Annotated[
+        str,
+        typer.Option(help="LLM backend: api, claude-code (uses your Claude plan), or auto."),
+    ] = "auto",
     transcribe: Annotated[bool, typer.Option(help="Transcribe speech with Whisper.")] = True,
     ocr: Annotated[bool, typer.Option(help="Read on-screen text.")] = True,
     geocode: Annotated[bool, typer.Option(help="Look each place up on the map.")] = True,
@@ -86,7 +90,7 @@ def extract(
 ) -> None:
     """Extract the places recommended in one or more posts."""
     logging.basicConfig(level=logging.INFO if verbose else logging.WARNING)
-    overrides: dict = {"output_language": lang}
+    overrides: dict = {"output_language": lang, "backend": backend}
     if cookies_from_browser:
         overrides["cookies_from_browser"] = cookies_from_browser
     pipeline = Pipeline(get_settings(**overrides))

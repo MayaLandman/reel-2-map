@@ -22,7 +22,13 @@ class Settings(BaseSettings):
     )
 
     # --- LLM ---
+    backend: str = Field(
+        default="auto",
+        description="api (needs ANTHROPIC_API_KEY), claude-code (local `claude` CLI signed in "
+        "with a Claude plan), or auto: api if a key is set, else claude-code.",
+    )
     model: str = "claude-sonnet-5-5"
+    claude_code_model: str = "sonnet"
     max_images: int = Field(default=20, description="Frames sent to the LLM as images.")
     output_language: str = Field(default="en", description="Language for the 'why' field.")
 
