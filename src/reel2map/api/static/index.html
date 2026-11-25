@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>reel2map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --bg:#f7f6f3; --card:#fff; --ink:#1d1d1f; --muted:#6b6b70; --line:#e4e2dd; --accent:#0b6e4f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141416; --card:#1e1e21; --ink:#f2f2f2; --muted:#a0a0a6; --line:#2e2e33; --accent:#3ccf91; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 20px; }
+  form { display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 16px; }
+  input[type=url] { flex: 1 1 380px; padding: 10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); font:inherit; }
+  select, button { padding: 10px 14px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--ink); font:inherit; }
+  button { background: var(--accent); color:#fff; border:none; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:wait; }
+  #status { color: var(--muted); min-height: 1.5em; margin-bottom: 12px; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  #map { height: 520px; border-radius: 12px; border:1px solid var(--line); }
+  ol { list-style:none; margin:0; padding:0; max-height:520px; overflow:auto; }
+  li { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:8px; unicode-bidi: plaintext; }
+  li .top { display:flex; justify-content:space-between; gap:8px; }
+  li b { font-size: 16px; }
+  .chip { font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; white-space:nowrap; }
+  .why { margin: 6px 0; unicode-bidi: plaintext; }
+  .meta { font-size: 13px; color: var(--muted); }
+  a { color: var(--accent); }
+  .exports a { margin-inline-end: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>reel2map</h1>
+  <p class="lead">Paste a TikTok, Instagram Reel or YouTube Short. The video is downloaded, its speech transcribed, its on-screen text read, and every recommended place is put on the map.</p>
+  <form id="f">
+    <input type="url" id="url" required placeholder="https://www.tiktok.com/@user/video/…">
+    <select id="lang"><option value="en">English</option><option value="he">עברית</option><option value="it">Italiano</option></select>
+    <button id="go">Extract places</button>
+  </form>
+  <div id="status"></div>
+  <div class="exports" id="exports" hidden></div>
+  <div class="grid">
+    <div id="map"></div>
+    <ol id="list"></ol>
+  </div>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([41.9, 12.49], 3);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function mapsUrl(p) {
+  if (p.geo) return p.geo.maps_url;
+  const q = [p.name, p.address_hint, p.city, p.country].filter(Boolean).join(', ');
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
+}
+
+function render(job) {
+  const r = job.result;
+  layer.clearLayers();
+  $('list').innerHTML = '';
+  const pts = [];
+  r.places.forEach((p, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<div class="top"><b>${i + 1}. ${esc(p.name)}</b><span class="chip">${esc(p.category)}</span></div>
+      <div class="why">${esc(p.why)}</div>
+      <div class="meta">${esc([p.city, p.country].filter(Boolean).join(', '))} · confidence ${p.confidence.toFixed(2)} · ${esc(p.evidence.join(', '))}
+      · <a href="${esc(mapsUrl(p))}" target="_blank" rel="noopener">Google Maps</a></div>`;
+    $('list').appendChild(li);
+    if (p.geo) {
+      const m = L.marker([p.geo.lat, p.geo.lon]).bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.why)}`);
+      layer.addLayer(m); pts.push([p.geo.lat, p.geo.lon]);
+      li.style.cursor = 'pointer';
+      li.onclick = () => { map.setView([p.geo.lat, p.geo.lon], 16); m.openPopup(); };
+    }
+  });
+  if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 15 });
+  const secs = r.timings.reduce((a, t) => a + t.seconds, 0).toFixed(0);
+  $('status').textContent = `${r.places.length} places found in ${secs}s. ${r.summary || ''}`;
+  $('exports').hidden = false;
+  $('exports').innerHTML = 'Download: ' + ['csv', 'kml', 'geojson', 'json']
+    .map(f => `<a href="/api/jobs/${job.id}/export?format=${f}">${f.toUpperCase()}</a>`).join('');
+}
+
+async function poll(id) {
+  const res = await fetch(`/api/jobs/${id}`);
+  const job = await res.json();
+  if (job.status === 'done') return render(job);
+  if (job.status === 'failed') { $('status').textContent = 'Failed: ' + job.error; return; }
+  $('status').textContent = `Working… ${job.stage || job.status}`;
+  setTimeout(() => poll(id), 1500);
+}
+
+$('f').onsubmit = async e => {
+  e.preventDefault();
+  $('go').disabled = true; $('exports').hidden = true;
+  $('status').textContent = 'Queued…';
+  try {
+    const res = await fetch('/api/jobs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: $('url').value, language: $('lang').value })
+    });
+    const job = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(job.detail));
+    await poll(job.id);
+  } catch (err) { $('status').textContent = 'Error: ' + err.message; }
+  finally { $('go').disabled = false; }
+};
+</script>
+</body>
+</html>
