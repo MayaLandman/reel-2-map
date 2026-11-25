@@ -117,7 +117,7 @@ def test_api_job_lifecycle(settings, tmp_path) -> None:
         create_app(pipeline_factory=lambda lang: InstantPipeline(), places_path=tmp_path / "p.json")
     )
     assert client.get("/api/health").json()["status"] == "ok"
-    assert "reel2map" in client.get("/").text
+    assert "מהריל למפה" in client.get("/").text
 
     job = client.post("/api/jobs", json={"url": "https://www.tiktok.com/@a/video/1"}).json()
     for _ in range(50):
