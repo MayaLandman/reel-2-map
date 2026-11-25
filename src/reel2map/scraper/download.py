@@ -121,6 +121,38 @@ def _comments(info: dict[str, Any], limit: int) -> list[str]:
     return [c["text"].strip() for c in comments[:limit] if c.get("text")]
 
 
+SHORT_HOSTS = ("vt.tiktok.com", "vm.tiktok.com", "tiktok.com/t/")
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def resolve_short_url(url: str, client: httpx.Client | None = None) -> str:
+    """Expand TikTok share links (vt.tiktok.com/...) to the canonical post URL.
+
+    Share links hide whether the post is a video or a photo slideshow; the canonical
+    URL tells us, and lets the /photo/ -> /video/ fallback work.
+    """
+    if not any(h in url for h in SHORT_HOSTS):
+        return url
+    try:
+        own = client is None
+        client = client or httpx.Client(
+            timeout=15, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}
+        )
+        try:
+            final = str(client.head(url).url)
+        finally:
+            if own:
+                client.close()
+    except httpx.HTTPError as exc:
+        log.info("could not expand %s: %s", url, exc)
+        return url
+    return final.split("?")[0] if "tiktok.com/@" in final else url
+
+
+def _clean(message: str) -> str:
+    return ANSI_RE.sub("", message).replace("ERROR: ", "").strip()
+
+
 def _alternate_urls(url: str) -> list[str]:
     """TikTok photo posts are served by the regular video endpoint as well."""
     if "tiktok.com" in url and "/photo/" in url:
@@ -138,7 +170,9 @@ def download_post(
 
     info: dict[str, Any] | None = None
     errors: list[str] = []
-    for candidate in [url, *_alternate_urls(url)]:
+    canonical = resolve_short_url(url)
+    candidates = list(dict.fromkeys([canonical, *_alternate_urls(canonical), url]))
+    for candidate in candidates:
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 raw = ydl.extract_info(candidate, download=True)
@@ -146,12 +180,17 @@ def download_post(
             if info:
                 break
         except yt_dlp.utils.DownloadError as exc:
-            errors.append(str(exc))
+            errors.append(_clean(str(exc)))
     if not info:
         hint = ""
-        if detect_platform(url) is Platform.INSTAGRAM:
-            hint = " Instagram usually needs cookies: set REEL2MAP_COOKIES_FROM_BROWSER=chrome."
-        raise DownloadError(f"could not download {url}: {'; '.join(errors)}{hint}")
+        joined = "; ".join(dict.fromkeys(errors))
+        if detect_platform(url) is Platform.INSTAGRAM or "403" in joined or "login" in joined:
+            hint = (
+                " The site refused the request. Try updating yt-dlp (pip install -U yt-dlp) "
+                "and using your browser's cookies: --cookies-from-browser chrome, or "
+                "REEL2MAP_COOKIES_FROM_BROWSER=chrome in .env."
+            )
+        raise DownloadError(f"could not download {url}: {joined}.{hint}")
 
     files = _collect_files(info)
     videos = [p for p in files if p.suffix.lower() in VIDEO_EXTS]

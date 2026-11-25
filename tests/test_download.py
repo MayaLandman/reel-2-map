@@ -99,3 +99,38 @@ def test_download_post_reports_instagram_hint(monkeypatch, tmp_path: Path, setti
     monkeypatch.setattr(yt_dlp, "YoutubeDL", Failing)
     with pytest.raises(DownloadError, match="cookies"):
         download.download_post("https://www.instagram.com/reel/x/", tmp_path, settings)
+
+
+def test_resolve_short_url_follows_redirect() -> None:
+    import httpx
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "vt.tiktok.com":
+            return httpx.Response(
+                301, headers={"Location": "https://www.tiktok.com/@chef/photo/99?_r=1&u=x"}
+            )
+        return httpx.Response(200)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+    url = download.resolve_short_url("https://vt.tiktok.com/ZSabc/", client)
+    assert url == "https://www.tiktok.com/@chef/photo/99"
+    assert download._alternate_urls(url) == ["https://www.tiktok.com/@chef/video/99"]
+    assert download.resolve_short_url("https://www.tiktok.com/@a/video/1") == (
+        "https://www.tiktok.com/@a/video/1"
+    )
+
+
+def test_error_message_is_clean_and_has_hint(monkeypatch, tmp_path: Path, settings) -> None:
+    import yt_dlp
+
+    class Forbidden(FakeYDL):
+        def extract_info(self, url, download=True):
+            raise yt_dlp.utils.DownloadError(
+                "\x1b[0;31mERROR:\x1b[0m [TikTok] 1: Unable to download webpage: HTTP Error 403"
+            )
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", Forbidden)
+    with pytest.raises(DownloadError) as info:
+        download.download_post("https://www.tiktok.com/@a/video/1", tmp_path, settings)
+    message = str(info.value)
+    assert "\x1b" not in message and "cookies-from-browser" in message
