@@ -51,7 +51,7 @@ Optional stages fail gracefully. If Whisper or OCR isn't installed, or transcrip
 
 ## Quick start
 
-Requirements: Python 3.11+ and [ffmpeg](https://ffmpeg.org/download.html) on your `PATH`.
+Requirements: Python 3.11+. A system [ffmpeg](https://ffmpeg.org/download.html) is used if it's on your `PATH`; otherwise the static build bundled with `imageio-ffmpeg` is used automatically, so nothing else needs installing.
 
 ```bash
 git clone https://github.com/MayaLandman/reel-2-map.git
@@ -102,6 +102,15 @@ docker build -t reel2map .
 docker run --rm -p 8000:8000 --env-file .env reel2map
 ```
 
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `pip install` fails while **building opencv-python** (e.g. `'algorithm' file not found` on macOS 14) | There's no prebuilt wheel for your OS. Install the newest prebuilt one first: `pip install --only-binary=opencv-python opencv-python`, then install reel2map again. |
+| `invalid literal for int()` inside `packaging/version.py` during install | You're on a pre-release Python (e.g. `3.12.0b1`). Recreate the venv with a stable release. |
+| `brew install ffmpeg` tries to compile and fails | Not needed: reel2map falls back to the ffmpeg bundled with `imageio-ffmpeg`. |
+| Instagram: `login required` | Pass `--cookies-from-browser chrome` (or set `REEL2MAP_COOKIES_FROM_BROWSER`). |
+
 ## Configuration
 
 All settings are environment variables, which can also go in `.env`:
@@ -119,6 +128,7 @@ All settings are environment variables, which can also go in `.env`:
 | `REEL2MAP_SCENE_THRESHOLD` | `0.30` | ffmpeg scene-change sensitivity |
 | `REEL2MAP_COOKIES_FROM_BROWSER` | none | `chrome`, `firefox`, `safari`… (Instagram) |
 | `REEL2MAP_COOKIES_FILE` | none | Netscape cookies.txt, as an alternative |
+| `REEL2MAP_FFMPEG` | auto | Path to a specific ffmpeg binary |
 
 ## Project layout
 
@@ -126,7 +136,7 @@ All settings are environment variables, which can also go in `.env`:
 src/reel2map/
 ├── scraper/download.py   yt-dlp wrapper: video, carousel images, caption, comments
 ├── media/
-│   ├── ffmpeg.py         ffprobe/ffmpeg helpers
+│   ├── ffmpeg.py         ffmpeg discovery (system or bundled) and helpers
 │   ├── frames.py         scene detection, near-duplicate removal, even spread
 │   ├── transcribe.py     faster-whisper
 │   └── ocr.py            RapidOCR + novelty-based frame ranking

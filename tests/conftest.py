@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
 from reel2map.config import Settings
+from reel2map.media import ffmpeg
 from reel2map.models import Place, Platform, Post
 
-needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+needs_ffmpeg = pytest.mark.skipif(not ffmpeg.available(), reason="ffmpeg not installed")
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def place() -> Place:
 @pytest.fixture
 def sample_video(tmp_path: Path) -> Path:
     """An 8 second clip with three very different 'shots' and a tone on the audio track."""
-    if shutil.which("ffmpeg") is None:
+    if not ffmpeg.available():
         pytest.skip("ffmpeg not installed")
     out = tmp_path / "clip.mp4"
     src = (
@@ -58,7 +58,7 @@ def sample_video(tmp_path: Path) -> Path:
     )
     subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg.ffmpeg_exe(),
             "-y",
             "-v",
             "error",

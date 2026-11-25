@@ -98,7 +98,7 @@ def test_listicle_frames_and_ocr(tmp_path: Path) -> None:
     video = tmp_path / "listicle.mp4"
     subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg.ffmpeg_exe(),
             "-y",
             "-v",
             "error",
